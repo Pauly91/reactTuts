@@ -1,3 +1,4 @@
 {
-	"mongoURI": "mongodb+srv://poly91:poly91@devconnector-51ckl.mongodb.net/test?retryWrites=true&w=majority"
+  "mongoURI": "mongodb+srv://poly91:poly91@devconnector-51ckl.mongodb.net/test?retryWrites=true&w=majority",
+  "jwtSecret": "mysecrettoken"
 }

@@ -3,6 +3,8 @@ const router = express.Router();
 const gravatar = require("gravatar");
 const { check, validationResult } = require("express-validator/check");
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const config = require("config");
 const User = require("../../models/User");
 // @route: POST api/users
 // @desc: Register user
@@ -16,67 +18,87 @@ const User = require("../../models/User");
 // in the second parameter.
 
 router.post(
-	"/",
-	[
-		check("name", "Name is required")
-			.not()
-			.isEmpty(),
-		check("email", "Please add a valid email-id").isEmail(),
-		check(
-			"password",
-			"Please add a password with 6 or more characters"
-		).isLength({
-			min: 6
-		})
-	],
-	async (req, res) => {
-		const errors = validationResult(req);
-		if (!errors.isEmpty()) {
-			return res.status(400).json({ errors: errors.array() });
-		}
+  "/",
+  [
+    check("name", "Name is required")
+      .not()
+      .isEmpty(),
+    check("email", "Please add a valid email-id").isEmail(),
+    check(
+      "password",
+      "Please add a password with 6 or more characters"
+    ).isLength({
+      min: 6
+    })
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
 
-		const { name, email, password } = req.body;
-		try {
-			// This is the server side code which checks if the given email id
-			// exist or not.
-			// So take the schema of the mongoose and query for the email
-			// and thus find out if it exist.
-			let user = await User.findOne({ email });
-			if (user) {
-				return res
-					.status(400)
-					.json({ error: [{ msg: "User already exists" }] });
-			}
+    const { name, email, password } = req.body;
+    try {
+      // This is the server side code which checks if the given email id
+      // exist or not.
+      // So take the schema of the mongoose and query for the email
+      // and thus find out if it exist.
+      let user = await User.findOne({ email });
+      if (user) {
+        return res
+          .status(400)
+          .json({ error: [{ msg: "User already exists" }] });
+      }
 
-			const avatar = gravatar.url(email, {
-				s: "200",
-				r: "pg",
-				d: "mm"
-			});
+      const avatar = gravatar.url(email, {
+        s: "200",
+        r: "pg",
+        d: "mm"
+      });
 
-			user = new User({
-				name,
-				email,
-				avatar,
-				password
-			});
+      user = new User({
+        name,
+        email,
+        avatar,
+        password
+      });
 
-			const salt = await bcrypt.genSalt(10);
+      const salt = await bcrypt.genSalt(10);
 
-			user.password = await bcrypt.hash(password, salt);
-			await user.save();
+      user.password = await bcrypt.hash(password, salt);
+      await user.save();
+      const payLoad = {
+        user: {
+          id: user.id
+        }
+      };
 
-			res.send("User Registered");
-		} catch (err) {
-			console.error(err.message);
-			res.status(500).send("Server Error");
-		}
+      jwt.sign(
+        payLoad,
+        config.get("jwtSecret"),
+        {
+          expiresIn: 36000
+        },
+        // The call back function sends the token to the user.
+        (err, token) => {
+          if (err) {
+            throw err;
+          }
+          // This is the token that the user uses for validation and logging
+          // in.
+          res.json({ token });
+        }
+      );
+    } catch (err) {
+      console.error(err.message);
+      res.status(500).send("Server Error");
+    }
 
-		// See if the user exist - If yes send an error.
-		// Get users gravatar
-		// Encrypt the password with
-		// Return JSON webtoken.
-	}
+    // See if the user exist - If yes send an error.
+    // Get users gravatar
+    // Encrypt the password with
+    // Return JSON webtoken.
+  }
 );
 
 module.exports = router;
