@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const auth = require("../../middleware/auth");
-const Profile = require("../../models/Profile");
 const User = require("../../models/User");
+const Profile = require("../../models/Profile");
 const { check, validationResult } = require("express-validator/check");
 // @route: Get api/profile/me
 // @desc: Get current user profile
@@ -11,10 +11,9 @@ const { check, validationResult } = require("express-validator/check");
 router.get("/me", auth, async (req, res) => {
   try {
     // This gets the profile of the user from the profile data base and inturn populate the UI with the name and the avatar.
-    const profile = await Profile.findOne({ user: req.user.id }).populate(
-      "user",
-      ["name", "avatar"]
-    );
+    const profile = await Profile.findOne({
+      user: req.user.id
+    }).populate("user", ["name", "avatar"]);
 
     if (!profile) {
       return res.status(400).json({ msg: "There is no profile for this user" });
@@ -100,7 +99,7 @@ router.post(
         profile = await Profile.findOneAndUpdate(
           { user: req.user.id },
           { $set: profileFields },
-          { new: true }
+          { new: true } // This boolen flag returns the updated profile value.
         );
         return res.json(profile);
       }
@@ -114,5 +113,152 @@ router.post(
     }
   }
 );
+
+// @route: GET api/profile/
+// @desc: Get all profile
+// @access: Public
+
+router.get("/", async (req, res) => {
+  try {
+    // This will get all the porfiles along with name and avatar from the users collection.
+    const profiles = await Profile.find().populate("user", ["name", "avatar"]);
+    res.json(profiles);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send("Server Error");
+  }
+});
+
+// @route: GET api/profile/user/:user_id
+// @desc: Get profile by user id.
+// @access: Public
+
+router.get("/user/:user_id", async (req, res) => {
+  try {
+    // This will get all the porfiles along with name and avatar from the users collection.
+    const profile = await Profile.findOne({
+      user: req.params.user_id
+    }).populate("user", ["name", "avatar"]);
+
+    if (!profile) {
+      return res.status(400).json({ msg: "Profile not found." });
+    }
+
+    res.json(profile);
+  } catch (err) {
+    console.error(err.message);
+    if (err.kind == "ObjectId") {
+      return res.status(400).json({ msg: "Profile not found." });
+    }
+    res.status(500).send("Server Error");
+  }
+});
+
+// @route: DELETE api/profile/me
+// @desc: Delete profile, user and post.
+// @access: Private
+
+router.delete("/", auth, async (req, res) => {
+  try {
+    // Remove profile.
+    await Profile.findOneAndRemove({
+      user: req.user.id
+    });
+    // The parameter passed to the function matched the _id or user for the above with the req.user.id and removes that data.
+    await User.findOneAndRemove({
+      _id: req.user.id
+    });
+
+    res.json({
+      msg: "user deleted."
+    });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send("Server Error");
+  }
+});
+
+// @route: Put api/profile/experience
+// @desc: Add profile experience.
+// @access: Private
+
+router.put(
+  "/experience",
+  [
+    auth,
+    [
+      check("title", "Title is required")
+        .not()
+        .isEmpty(),
+      check("company", "company is required")
+        .not()
+        .isEmpty(),
+      check("from", "from date is required")
+        .not()
+        .isEmpty()
+    ]
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+    const {
+      title,
+      company,
+      location,
+      from,
+      to,
+      current,
+      description
+    } = req.body;
+
+    const newExp = {
+      title,
+      company,
+      location,
+      from,
+      to,
+      current,
+      description
+    };
+
+    try {
+      const profile = await Profile.findOne({ user: req.user.id });
+      // Unshift pushs the new experience to the front of the array.
+      profile.experience.unshift(newExp);
+      await profile.save();
+      res.json(profile);
+    } catch (err) {
+      console.error(err.message);
+      res.status(500).send("Server error");
+    }
+  }
+);
+
+// @route: DELETE api/profile//experience/:exp_id
+// @desc: Delete profile experience
+// @access: Private
+
+router.delete("/experience/:exp_id", auth, async (req, res) => {
+  try {
+    const profile = await Profile.findOne({ user: req.user.id });
+    /* Get remove index.
+      - This index is required to get the experience that needs to be removed.
+      - So the profile experience as taken, then using a map function each experience is mapped on to its id and then indexOf the experience with our ID is then returned.
+
+    */
+    const removeIndex = profile.experience
+      .map(item => item.id)
+      .indexOf(req.params.exp_id);
+
+    profile.experience.splice(removeIndex, 1);
+    await profile.save();
+    res.json(profile);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send("Server Error");
+  }
+});
 
 module.exports = router;
